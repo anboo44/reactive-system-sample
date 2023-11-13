@@ -1,0 +1,19 @@
+<configuration>
+    <appender name="Console" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder>
+            <pattern>%cyan(%d{HH:mm:ss.SSS}) %green([%thread]) %highlight(%-5level) %magenta(%logger{36}) - %msg%n</pattern>
+        </encoder>
+        <filter class="ch.qos.logback.classic.filter.ThresholdFilter">
+            <level>INFO</level>
+        </filter>
+    </appender>
+
+    <logger name="c.uet.microservices.MasterService.0" level="OFF"/>
+    <logger name="i.activej.service.ServiceGraphModule" level="OFF"/>
+    <logger name="io.activej.config.ConfigModule" level="OFF"/>
+    <logger name="i.activej.service.ServiceGraphModule" level="OFF"/>
+
+    <root level="INFO">
+        <appender-ref ref="Console"/>
+    </root>
+</configuration>
