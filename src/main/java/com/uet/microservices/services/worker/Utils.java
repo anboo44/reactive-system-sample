@@ -1,5 +1,7 @@
 package com.uet.microservices.services.worker;
 
+import java.io.IOException;
+import java.net.ServerSocket;
 import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
 
@@ -17,5 +19,14 @@ public class Utils {
             }
         }
         return sum;
+    }
+
+    public static int findAvailablePort() {
+        try (ServerSocket serverSocket = new ServerSocket(0)) {
+            return serverSocket.getLocalPort();
+        } catch (IOException e) {
+            System.out.println("Port is not available");
+            return findAvailablePort();
+        }
     }
 }

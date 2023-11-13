@@ -19,9 +19,9 @@ public class SecondWorkerService {
     public final  int       rpcServerPort;
     private final Eventloop eventloop;
 
-    public SecondWorkerService(int discoveryPort, int rpcServerPort) {
-        this.discoveryPort = discoveryPort;
-        this.rpcServerPort = rpcServerPort;
+    public SecondWorkerService() {
+        this.discoveryPort = Utils.findAvailablePort();
+        this.rpcServerPort = Utils.findAvailablePort();
         this.eventloop     = Eventloop.create();
     }
 
@@ -84,7 +84,7 @@ public class SecondWorkerService {
     }
 
     public static void main(String[] args) throws IOException {
-        var ins = new SecondWorkerService(9510, 9500);
+        var ins = new SecondWorkerService();
         ins.laugh();
     }
 }
