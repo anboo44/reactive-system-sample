@@ -1,73 +1,79 @@
 package com.uet.microservices.services.log;
 
-import com.uet.microservices.models.NodeRegister;
-import com.uet.microservices.models.Notify;
-import com.uet.microservices.services.discovery.DiscoveryService;
+import com.uet.microservices.lib.service.AbstractClusterService;
+import com.uet.microservices.lib.protocol.RpcBasicOperation;
+import com.uet.microservices.lib.model.NodeType;
 import io.activej.eventloop.Eventloop;
 import io.activej.promise.Promise;
-import io.activej.rpc.client.RpcClient;
-import io.activej.rpc.client.sender.strategy.RpcStrategies;
-import io.activej.rpc.server.RpcServer;
+import io.activej.rpc.server.RpcRequestHandler;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
-import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 
-public class LogService {
-    public static final  int       DISCOVERY_PORT  = 9110;
-    public static final  int       RPC_SERVER_PORT = 9100;
-    private static final Eventloop eventloop       = Eventloop.create();
+public class LogService extends AbstractClusterService {
+    protected LogService(
+        Eventloop eventloop,
+        InetSocketAddress discoveryAddr,
+        String serviceName,
+        NodeType nodeType,
+        List<NodeType> seedTypes
+    ) {
+        super(eventloop, discoveryAddr, serviceName, nodeType, seedTypes);
+    }
 
-    private static void register() {
-        // -> Register to discovery service
-        var registerMsg = new NodeRegister(RPC_SERVER_PORT, DISCOVERY_PORT, "log", List.of());
-        var rpcClient = RpcClient.builder(eventloop)
-                                 .withMessageTypes(NodeRegister.class, Boolean.class)
-                                 .withStrategy(RpcStrategies.server(new InetSocketAddress(DiscoveryService.RPC_SERVER_PORT)))
-                                 .withForcedShutdown()
-                                 .build();
-        rpcClient.start()
-                 .whenResult($ -> System.out.println("Start to register to discovery service"))
-                 .whenComplete(() -> {
-                     rpcClient.sendRequest(registerMsg)
-                              .whenResult($ -> rpcClient.stop().whenComplete(() -> System.out.println("Register to discovery service successfully")))
-                              .whenException(e -> {
-                                  rpcClient.stop()
-                                           .whenComplete(() -> {
-                                               System.out.println("Cannot register to discovery service => Retry in 5s");
-                                               eventloop.scheduleBackground(
-                                                   Instant.now().plusSeconds(5),
-                                                   LogService::register
-                                               );
-                                           });
-                              });
-                 });
+    public static LogService create(Eventloop eventloop, InetSocketAddress discoveryAddr) {
+        return new LogService(
+            eventloop,
+            discoveryAddr,
+            "log-service",
+            NodeType.LOG,
+            List.of()
+        );
+    }
+
+    @Override
+    protected Map<Class, RpcRequestHandler> makeRpcRequestHandlers() {
+        RpcRequestHandler<String, RpcBasicOperation> messageHandler =
+            msg -> {
+                logger.info(">> Received message: {}", msg);
+                var task   = LogTask.create(msg);
+                var sender = this.seedNodeManager.getSender(NodeType.LOG);
+                return sender.sendRequest(task)
+                             .map($ -> RpcBasicOperation.ACCEPT);
+            };
+
+        RpcRequestHandler<LogTask, RpcBasicOperation> taskHandler =
+            task -> {
+                switch (task.taskType) {
+                    case INFO -> logger.info(">> Received a task: {}", task.message);
+                    case WARN -> logger.warn(">> Received a task: {}", task.message);
+                    case ERROR -> logger.error(">> Received a task: {}", task.message);
+                }
+
+                return Promise.of(RpcBasicOperation.ACCEPT);
+            };
+
+        return Map.of(
+            String.class, messageHandler,
+            LogTask.class, taskHandler
+        );
+    }
+
+    @Override
+    protected Map<NodeType, List<Class<?>>> getConnectionClassTypes() {
+        return Map.of(
+            NodeType.LOG, List.of(String.class, RpcBasicOperation.class, LogTask.class)
+        );
     }
 
     public static void main(String[] args) throws IOException {
-        // -> Main RPC server
-        RpcServer.builder(eventloop)
-                 .withMessageTypes(String.class)
-                 .withHandler(String.class, req -> {
-                     System.out.println(req);
-                     return Promise.of("From log-service: Hello master-service");
-                 })
-                 .withListenPort(RPC_SERVER_PORT)
-                 .build()
-                 .listen();
+        var eventloop     = Eventloop.create();
+        var discoveryAddr = new InetSocketAddress("localhost", 9000);
+        var logService = LogService.create(eventloop, discoveryAddr);
 
-        // -> Discovery RPC server
-        RpcServer.builder(eventloop)
-                 .withMessageTypes(Notify.class, Boolean.class)
-                 .withHandler(Boolean.class, req -> Promise.of(true))
-                 .withListenPort(DISCOVERY_PORT)
-                 .build()
-                 .listen();
-
-        register();
-        // -> Start eventloop
-        eventloop.keepAlive(true);
+        logService.startService();
         eventloop.run();
     }
 }

@@ -1,158 +1,113 @@
 package com.uet.microservices.services.master;
 
-import com.uet.microservices.models.NodeRegister;
-import com.uet.microservices.models.Notify;
-import com.uet.microservices.services.discovery.DiscoveryService;
+import com.uet.microservices.lib.model.NodeType;
+import com.uet.microservices.lib.protocol.RpcBasicOperation;
+import com.uet.microservices.lib.service.AbstractClusterService;
 import io.activej.eventloop.Eventloop;
-import io.activej.http.HttpMethod;
+import io.activej.http.AsyncServlet;
 import io.activej.http.HttpResponse;
 import io.activej.http.HttpServer;
 import io.activej.http.RoutingServlet;
-import io.activej.promise.Promise;
-import io.activej.rpc.client.RpcClient;
-import io.activej.rpc.client.sender.strategy.RpcStrategies;
-import io.activej.rpc.server.RpcServer;
+import io.activej.rpc.server.RpcRequestHandler;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
-import java.time.Duration;
-import java.time.Instant;
-import java.util.*;
+import java.util.List;
+import java.util.Map;
 
-public class MasterService {
-    public static final  int       DISCOVERY_PORT  = 9210;
-    public static final  int       RPC_SERVER_PORT = 9200;
-    private static final Eventloop eventloop       = Eventloop.create();
+import static io.activej.http.HttpMethod.GET;
 
-    private static final Map<String, RpcClient> rpcClusterClients = new HashMap<>();
+public class MasterService extends AbstractClusterService {
+    private final int webPort;
 
-    private static void register() {
-        // -> Register to discovery service
-        var registerMsg = new NodeRegister(RPC_SERVER_PORT, DISCOVERY_PORT, "master", List.of("log", "working-leader"));
-        var rpcClient = RpcClient.builder(eventloop)
-                                 .withMessageTypes(NodeRegister.class, Boolean.class)
-                                 .withStrategy(RpcStrategies.server(new InetSocketAddress(DiscoveryService.RPC_SERVER_PORT)))
-                                 .withForcedShutdown()
-                                 .build();
-        rpcClient.start()
-                 .whenResult($ -> System.out.println("Start to register to discovery service"))
-                 .whenComplete(() -> {
-                     rpcClient.sendRequest(registerMsg)
-                              .whenResult($ -> rpcClient.stop().whenComplete(() -> System.out.println("Register to discovery service successfully")))
-                              .whenException(e -> {
-                                  rpcClient.stop()
-                                           .whenComplete(() -> {
-                                               System.out.println("Cannot register to discovery service => Retry in 5s");
-                                               eventloop.scheduleBackground(
-                                                   Instant.now().plusSeconds(5),
-                                                   MasterService::register
-                                               );
-                                           });
-                              });
-                 });
+    protected MasterService(
+        Eventloop eventloop,
+        InetSocketAddress discoveryAddr,
+        String serviceName,
+        NodeType nodeType,
+        List<NodeType> seedTypes,
+        int webPort
+    ) {
+        super(eventloop, discoveryAddr, serviceName, nodeType, seedTypes);
+        this.webPort = webPort;
+    }
+
+    public static MasterService create(Eventloop eventloop, InetSocketAddress discoveryAddr) {
+        return new MasterService(
+            eventloop,
+            discoveryAddr,
+            "master-service",
+            NodeType.MASTER_API,
+            List.of(NodeType.WORKER, NodeType.LOG),
+            9080
+        );
+    }
+
+    @Override
+    protected Map<Class, RpcRequestHandler> makeRpcRequestHandlers() {
+        return Map.of();
+    }
+
+    @Override
+    protected Map<NodeType, List<Class<?>>> getConnectionClassTypes() {
+        return Map.of(
+            NodeType.WORKER, List.of(CalcRequest.class, Integer.class),
+            NodeType.LOG, List.of(String.class, RpcBasicOperation.class)
+        );
+    }
+
+    @Override
+    public void startService() throws IOException {
+        super.startService();
+        startWebServer();
+    }
+
+    private void startWebServer() throws IOException {
+        AsyncServlet logHandler = req -> {
+            var sender = this.seedNodeManager.getSender(NodeType.LOG);
+            var msg    = req.getQueryParameter("msg");
+            return sender.sendRequest(msg)
+                         .map($ -> HttpResponse.ok200().withPlainText("OK").build());
+        };
+
+        AsyncServlet calcHandler = req -> {
+            var range  = req.getQueryParameter("range");
+            var values = range.split("-");
+            var calcRequest = new CalcRequest(
+                Integer.parseInt(values[0]),
+                Integer.parseInt(values[1])
+            );
+
+            var sender = this.seedNodeManager.getSender(NodeType.WORKER);
+            var start  = System.currentTimeMillis();
+            return sender.sendRequest(calcRequest)
+                         .cast(Integer.class)
+                         .map(res -> {
+                             var end      = System.currentTimeMillis();
+                             var duration = end - start;
+                             var msg = String.format("Value = %d in %dms", res, duration);
+
+                             return HttpResponse.ok200().withPlainText(msg).build();
+                         });
+        };
+
+        var servlet = RoutingServlet.builder(eventloop)
+                                    .with(GET, "/test-log", logHandler)
+                                    .with(GET, "/test-worker", calcHandler)
+                                    .build();
+        var server = HttpServer.builder(eventloop, servlet)
+                               .withListenPort(webPort)
+                               .build();
+        server.listen();
+        logger.info(">> Web-server stated at port: {}", webPort);
     }
 
     public static void main(String[] args) throws IOException {
-        // -> Main RPC server
-        RpcServer.builder(eventloop)
-                 .withMessageTypes(String.class, Boolean.class)
-                 .withHandler(String.class, req -> Promise.of("Hello1 " + req))
-                 .withListenPort(RPC_SERVER_PORT)
-                 .build()
-                 .listen();
+        var eventloop     = Eventloop.create();
+        var discoveryAddr = new InetSocketAddress("localhost", 9000);
+        var masterService = MasterService.create(eventloop, discoveryAddr);
 
-        // -> Discovery RPC server
-        RpcServer.builder(eventloop)
-                 .withMessageTypes(Notify.class, Boolean.class)
-                 .withHandler(Notify.class, req -> {
-                     var targetClient = rpcClusterClients.get(req.nodeType);
-                     if (targetClient == null && req.isUp) {
-                         var newRpcClient = RpcClient.builder(eventloop)
-                                                     .withMessageTypes(String.class)
-                                                     .withStrategy(RpcStrategies.server(new InetSocketAddress(req.port)))
-                                                     .withReconnectInterval(Duration.ofSeconds(5))
-                                                     .build();
-                         rpcClusterClients.put(req.nodeType, newRpcClient);
-                         newRpcClient.start();
-                     }
-
-                     if (targetClient != null && req.isUp) {
-                         var oddAddrs = new HashSet<>(targetClient.getConnectsStatsPerAddress().keySet());
-                         oddAddrs.add(new InetSocketAddress(req.port));
-                         var strategy = RpcStrategies.roundRobin(
-                             oddAddrs.stream().map(RpcStrategies::server).toList()
-                         );
-                         targetClient.changeStrategy(strategy, true);
-                     }
-
-                     if (targetClient != null && !req.isUp) {
-                         var oddAddrs = new HashSet<>(targetClient.getConnectsStatsPerAddress().keySet());
-                         oddAddrs.removeIf(addr -> addr.getPort() == req.port);
-                         if (oddAddrs.isEmpty()) {
-                             rpcClusterClients.remove(req.nodeType);
-                             targetClient.stop();
-                         } else {
-                             var strategy = RpcStrategies.roundRobin(
-                                 oddAddrs.stream().map(RpcStrategies::server).toList()
-                             );
-                             targetClient.changeStrategy(strategy, true);
-                         }
-                     }
-
-                     return Promise.of(true);
-                 })
-                 .withHandler(Boolean.class, req -> Promise.of(true))
-                 .withListenPort(DISCOVERY_PORT)
-                 .build()
-                 .listen();
-
-        register();
-
-        // -> Start Http server
-        var servlet = RoutingServlet.builder(eventloop)
-                                    .with(HttpMethod.GET, "/", req -> {
-                                        Optional.ofNullable(rpcClusterClients.get("log"))
-                                                .map(client -> client.sendRequest("From master-service: Hello log-service"));
-
-                                        return Promise.of(HttpResponse.ok200().withPlainText("OK").build());
-                                    })
-                                    .with(HttpMethod.GET, "/calc", req -> {
-                                        var start      = System.currentTimeMillis();
-                                        var range      = req.getQueryParameter("range");
-                                        var useCluster = req.getQueryParameter("useCluster");
-
-                                        Optional.ofNullable(rpcClusterClients.get("log"))
-                                                .map(client -> client.sendRequest("From master-service: Calc request " + range));
-
-                                        var rpcCLient = rpcClusterClients.get("working-leader");
-                                        if (rpcCLient == null) {
-                                            return Promise.of(HttpResponse.ok200().withPlainText("No worker node available").build());
-                                        } else {
-                                            return rpcCLient.sendRequest(range + "-" + useCluster)
-                                                            .cast(String.class)
-                                                            .then(res -> {
-                                                                var end      = System.currentTimeMillis();
-                                                                var duration = end - start;
-                                                                return Promise.of(
-                                                                    HttpResponse.ok200()
-                                                                                .withPlainText("Value = " + res + " in " + duration + "ms")
-                                                                                .build()
-                                                                );
-                                                            }, e -> {
-                                                                return Promise.of(
-                                                                    HttpResponse.ok200().withPlainText("Happened error" + e.getMessage()).build()
-                                                                );
-                                                            });
-                                        }
-                                    })
-                                    .build();
-        var server = HttpServer.builder(eventloop, servlet)
-                               .withListenPort(3000)
-                               .build();
-        server.listen();
-
-        // -> Start eventloop
-        eventloop.keepAlive(true);
+        masterService.startService();
         eventloop.run();
     }
 }
