@@ -63,9 +63,9 @@ class ServiceHandler {
 
         rpcClient.start().whenComplete(() -> {
             var promises = seedNodes.stream()
-                     .map(sn -> new RpcNodeEvent(sn, true))
-                     .map(rpcClient::sendRequest)
-                     .toList();
+                                    .map(sn -> new RpcNodeEvent(sn, true))
+                                    .map(rpcClient::sendRequest)
+                                    .toList();
             Promises.all(promises).whenComplete(rpcClient::stop);
         });
     }

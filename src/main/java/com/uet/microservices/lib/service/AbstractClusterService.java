@@ -29,12 +29,13 @@ public abstract class AbstractClusterService {
     private final String   serviceName;
     private final NodeType nodeType;
 
-    protected final   Eventloop         eventloop;
+    protected final Eventloop         eventloop;
     protected final Logger            logger;
     private final   InetSocketAddress dscAddr;
     private final   List<NodeType>    seedTypes;
     protected final SeedNodeManager   seedNodeManager;
-    private final   Map<NodeType, List<Class<?>>> classTypes;
+
+    private final Map<NodeType, List<Class<?>>> classTypes;
 
     protected AbstractClusterService(
         Eventloop eventloop,

@@ -85,7 +85,7 @@ public class MasterService extends AbstractClusterService {
                          .map(res -> {
                              var end      = System.currentTimeMillis();
                              var duration = end - start;
-                             var msg = String.format("Value = %d in %dms", res, duration);
+                             var msg      = String.format("Value = %d in %dms", res, duration);
 
                              return HttpResponse.ok200().withPlainText(msg).build();
                          });

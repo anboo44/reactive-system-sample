@@ -1,8 +1,8 @@
 package com.uet.microservices.services.log;
 
-import com.uet.microservices.lib.service.AbstractClusterService;
-import com.uet.microservices.lib.protocol.RpcBasicOperation;
 import com.uet.microservices.lib.model.NodeType;
+import com.uet.microservices.lib.protocol.RpcBasicOperation;
+import com.uet.microservices.lib.service.AbstractClusterService;
 import io.activej.eventloop.Eventloop;
 import io.activej.promise.Promise;
 import io.activej.rpc.server.RpcRequestHandler;
@@ -71,7 +71,7 @@ public class LogService extends AbstractClusterService {
     public static void main(String[] args) throws IOException {
         var eventloop     = Eventloop.create();
         var discoveryAddr = new InetSocketAddress("localhost", 9000);
-        var logService = LogService.create(eventloop, discoveryAddr);
+        var logService    = LogService.create(eventloop, discoveryAddr);
 
         logService.startService();
         eventloop.run();
