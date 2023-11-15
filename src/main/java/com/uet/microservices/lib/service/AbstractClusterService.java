@@ -1,6 +1,7 @@
 package com.uet.microservices.lib.service;
 
 import com.uet.microservices.lib.model.NodeAddr;
+import com.uet.microservices.lib.model.NodeStatus;
 import com.uet.microservices.lib.model.NodeType;
 import com.uet.microservices.lib.model.SeedNode;
 import com.uet.microservices.lib.protocol.RpcBasicOperation;
@@ -24,10 +25,12 @@ import java.util.List;
 import java.util.Map;
 
 public abstract class AbstractClusterService {
-    private final int      rpcDscPort;
-    private final int      rpcMainPort;
     private final String   serviceName;
     private final NodeType nodeType;
+
+    private final InetSocketAddress             rpcDscServerAddr;
+    private final InetSocketAddress             rpcMainServerAddr;
+    private final Map<NodeType, List<Class<?>>> classTypes;
 
     protected final Eventloop         eventloop;
     protected final Logger            logger;
@@ -35,7 +38,6 @@ public abstract class AbstractClusterService {
     private final   List<NodeType>    seedTypes;
     protected final SeedNodeManager   seedNodeManager;
 
-    private final Map<NodeType, List<Class<?>>> classTypes;
 
     protected AbstractClusterService(
         Eventloop eventloop,
@@ -44,8 +46,11 @@ public abstract class AbstractClusterService {
         NodeType nodeType,
         List<NodeType> seedTypes
     ) {
-        this.rpcDscPort      = MyUtils.findAvailablePort();
-        this.rpcMainPort     = MyUtils.findAvailablePort();
+        var rpcDscServerPort  = MyUtils.findAvailablePort();
+        var rpcMainServerPort = MyUtils.findAvailablePort();
+        this.rpcDscServerAddr  = new InetSocketAddress("localhost", rpcDscServerPort);
+        this.rpcMainServerAddr = new InetSocketAddress("localhost", rpcMainServerPort);
+
         this.eventloop       = eventloop;
         this.logger          = LoggerFactory.getLogger(this.getClass());
         this.dscAddr         = discoveryAddr;
@@ -88,7 +93,7 @@ public abstract class AbstractClusterService {
                  .withMessageTypes(RpcCommon.rpcDscClassTypes)
                  .withHandler(RpcNodeEvent.class, handleRpcNodeEvent)
                  .withHandler(RpcBasicOperation.class, $ -> Promise.of(RpcBasicOperation.ACCEPT))
-                 .withListenPort(rpcDscPort)
+                 .withListenAddress(rpcDscServerAddr)
                  .build()
                  .listen();
     }
@@ -107,27 +112,23 @@ public abstract class AbstractClusterService {
 
         var rpcServer = RpcServer.builder(eventloop)
                                  .withMessageTypes(targetClassTypes)
-                                 .withListenPort(rpcMainPort);
+                                 .withListenAddress(rpcMainServerAddr);
         handlers.forEach(rpcServer::withHandler);
         rpcServer.build().listen();
         this.seedNodeManager.addNewNode(
-            new SeedNode(serviceName, nodeType, new NodeAddr("localhost", rpcMainPort))
+            new SeedNode(serviceName, nodeType, new NodeAddr(rpcMainServerAddr))
         );
-        this.logger.info(">> == Start main RPC-SERVER at port {} ==", rpcMainPort);
+        this.logger.info(">> == Start main RPC-SERVER at port {} ==", rpcMainServerAddr);
     }
 
     private void registerToDiscoveryService() {
-        var rpcClient = RpcClient.builder(eventloop)
-                                 .withMessageTypes(RpcCommon.rpcDscClassTypes)
-                                 .withStrategy(RpcStrategies.server(dscAddr))
-                                 .withForcedShutdown()
-                                 .build();
+        var rpcClient = makeDiscoveryRpcClient(this.eventloop);
         var msg = new RpcNodeInfo(
             this.serviceName,
             this.nodeType,
             this.seedTypes.isEmpty(),
-            new NodeAddr("localhost", rpcDscPort),
-            new NodeAddr("localhost", rpcMainPort)
+            new NodeAddr(rpcDscServerAddr),
+            new NodeAddr(rpcMainServerAddr)
         );
 
         rpcClient.start().whenComplete(() -> {
@@ -155,6 +156,34 @@ public abstract class AbstractClusterService {
         startRpcDiscoveryServer();
         startRpcMainServer();
         registerToDiscoveryService();
+
+        Runtime.getRuntime().addShutdownHook(
+            new Thread(() -> {
+                var shutdownEL = Eventloop.create();
+                var rpcClient  = makeDiscoveryRpcClient(shutdownEL);
+                var event = new RpcNodeEvent(
+                    new NodeAddr(rpcMainServerAddr),
+                    NodeStatus.DOWN,
+                    this.nodeType,
+                    this.serviceName
+                );
+
+                shutdownEL.submit(() -> {
+                    rpcClient.start()
+                             .then($ -> rpcClient.sendRequest(event))
+                             .whenComplete(rpcClient::stop);
+                });
+                shutdownEL.run();
+            })
+        );
+    }
+
+    private RpcClient makeDiscoveryRpcClient(Eventloop eventloop) {
+        return RpcClient.builder(eventloop)
+                        .withMessageTypes(RpcCommon.rpcDscClassTypes)
+                        .withStrategy(RpcStrategies.server(dscAddr))
+                        .withForcedShutdown()
+                        .build();
     }
 
     protected abstract Map<Class, RpcRequestHandler> makeRpcRequestHandlers();

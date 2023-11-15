@@ -6,6 +6,7 @@ import com.uet.microservices.lib.service.AbstractClusterService;
 import com.uet.microservices.services.ServiceType;
 import io.activej.eventloop.Eventloop;
 import io.activej.promise.Promise;
+import io.activej.reactor.schedule.ScheduledRunnable;
 import io.activej.rpc.server.RpcRequestHandler;
 
 import java.io.IOException;

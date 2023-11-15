@@ -41,6 +41,29 @@ class ServiceHandler {
     }
 
     // ===============/ RPC-ACTION /===============//
+    public Promise<RpcBasicOperation> handleNodeEvent(RpcNodeEvent nodeEvent) {
+        return switch (nodeEvent.status) {
+            case DOWN -> {
+                var downNode =
+                    this.allNodes.stream()
+                                 .filter(node -> node.equals(nodeEvent))
+                                 .findFirst()
+                                 .orElse(null);
+                if (downNode == null) {
+                    yield Promise.of(RpcBasicOperation.REJECT);
+                } else {
+                    logger.info(">> A node has quited from cluster: {}", nodeEvent);
+
+                    this.allNodes.removeIf(node -> node.equals(downNode));
+                    notifyToNodes(this.allNodes, downNode, false);
+                    yield Promise.of(RpcBasicOperation.ACCEPT);
+                }
+            }
+
+            default -> Promise.of(RpcBasicOperation.REJECT);
+        };
+    }
+
     public Promise<RpcBasicOperation> acceptNode(RpcNodeInfo nodeInfo) {
         var oldSeedNodes = new ArrayList<>(this.allNodes);
         notifyToNodes(oldSeedNodes, nodeInfo, true);  // -> Notify all other nodes in cluster about this new node

@@ -30,4 +30,24 @@ public class RpcNodeEvent {
         this.nodeType = nodeInfo.nodeType;
         this.nodeName = nodeInfo.name;
     }
+
+    @Override
+    public String toString() {
+        return "RpcNodeEvent(" + nodeAddr + ", " + status + ", " + nodeType + ", " + nodeName + ")";
+    }
+
+    @Override
+    public int hashCode() {
+        return nodeAddr.hashCode() + status.hashCode() + nodeType.hashCode() + nodeName.hashCode();
+    }
+
+    @Override
+    public boolean equals(Object obj) {
+        if (obj instanceof RpcNodeEvent other) {
+            return this.nodeAddr.equals(other.nodeAddr) &&
+                   this.nodeType == other.nodeType &&
+                   this.nodeName.equals(other.nodeName);
+        }
+        return false;
+    }
 }

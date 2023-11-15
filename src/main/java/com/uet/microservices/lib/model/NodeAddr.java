@@ -14,6 +14,11 @@ public class NodeAddr {
         this.port = port;
     }
 
+    public NodeAddr(InetSocketAddress addr) {
+        this.host = addr.getHostString();
+        this.port = addr.getPort();
+    }
+
     public InetSocketAddress toSocketAddr() {
         return new InetSocketAddress(host, port);
     }

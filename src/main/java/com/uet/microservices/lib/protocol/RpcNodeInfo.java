@@ -31,4 +31,30 @@ public class RpcNodeInfo {
     public String toString() {
         return "RpcNodeInfo(" + name + ", " + nodeType + ", " + dscServerAddr + ", " + mainServerAddr + ", " + isAlone + ")";
     }
+
+    @Override
+    public int hashCode() {
+        return name.hashCode() + nodeType.hashCode() + dscServerAddr.hashCode() + mainServerAddr.hashCode() + (isAlone ? 1 : 0);
+    }
+
+    @Override
+    public boolean equals(Object obj) {
+        if (obj instanceof RpcNodeInfo other) {
+            return this.name.equals(other.name) &&
+                   this.nodeType == other.nodeType &&
+                   this.dscServerAddr.equals(other.dscServerAddr) &&
+                   this.mainServerAddr.equals(other.mainServerAddr);
+        }
+
+        if (obj instanceof RpcNodeEvent ev) {
+            return this.name.equals(ev.nodeName) &&
+                   this.nodeType.equals(ev.nodeType) && (
+                       this.dscServerAddr.equals(ev.nodeAddr) ||
+                       this.mainServerAddr.equals(ev.nodeAddr)
+                   );
+        }
+
+        return false;
+    }
+
 }

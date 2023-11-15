@@ -1,6 +1,7 @@
 package com.uet.microservices.lib.service.discovery;
 
 import com.uet.microservices.lib.protocol.RpcCommon;
+import com.uet.microservices.lib.protocol.RpcNodeEvent;
 import com.uet.microservices.lib.protocol.RpcNodeInfo;
 import com.uet.microservices.utils.MyUtils;
 import io.activej.eventloop.Eventloop;
@@ -54,6 +55,7 @@ public final class DiscoveryService {
         var server = RpcServer.builder(eventloop)
                               .withMessageTypes(RpcCommon.rpcDscClassTypes)
                               .withHandler(RpcNodeInfo.class, serviceHandler::acceptNode)
+                              .withHandler(RpcNodeEvent.class, serviceHandler::handleNodeEvent)
                               .withListenPort(rpcServerPort)
                               .build();
         try {
