@@ -1,4 +1,4 @@
-package com.uet.microservices.services.worker;
+package com.uet.microservices.testcase;
 
 import com.uet.microservices.services.master.CalcRequest;
 import com.uet.microservices.utils.MyUtils;
@@ -8,7 +8,7 @@ import io.activej.rpc.client.sender.strategy.RpcStrategies;
 
 import java.net.InetSocketAddress;
 
-public class TestWorker {
+public class TestWorkerService {
     public static void main(String[] args) {
         var eventloop = Eventloop.create();
         var client = RpcClient.builder(eventloop)
