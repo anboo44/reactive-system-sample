@@ -156,7 +156,10 @@ public abstract class AbstractClusterService {
         startRpcDiscoveryServer();
         startRpcMainServer();
         registerToDiscoveryService();
+        shutdownServiceGraceful();
+    }
 
+    private void shutdownServiceGraceful() {
         Runtime.getRuntime().addShutdownHook(
             new Thread(() -> {
                 var shutdownEL = Eventloop.create();
