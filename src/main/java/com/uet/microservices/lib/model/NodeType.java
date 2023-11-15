@@ -1,5 +1,6 @@
 package com.uet.microservices.lib.model;
 
-public enum NodeType {
-    MASTER_API, LOG, WORKER
-}
+import io.activej.serializer.annotations.SerializeRecord;
+
+@SerializeRecord
+public record NodeType(String value){}

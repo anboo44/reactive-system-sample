@@ -2,6 +2,7 @@ package com.uet.microservices.services.worker;
 
 import com.uet.microservices.lib.model.NodeType;
 import com.uet.microservices.lib.service.AbstractClusterService;
+import com.uet.microservices.services.ServiceType;
 import com.uet.microservices.services.master.CalcRequest;
 import com.uet.microservices.utils.MyUtils;
 import io.activej.eventloop.Eventloop;
@@ -31,8 +32,8 @@ public class WorkerService extends AbstractClusterService {
             eventloop,
             discoveryAddr,
             "worker-service-1",
-            NodeType.WORKER,
-            List.of(NodeType.WORKER)
+            ServiceType.WORKER,
+            List.of(ServiceType.WORKER)
         );
     }
 
@@ -50,7 +51,7 @@ public class WorkerService extends AbstractClusterService {
                     );
                 } else {
                     logger.info(">> This is a big task: {}. Split it and send them to cluster", req);
-                    var sender = this.seedNodeManager.getSender(NodeType.WORKER);
+                    var sender = this.seedNodeManager.getSender(ServiceType.WORKER);
                     var tasks  = WorkerTask.breakBig(req.from, req.to, 2);
 
                     var promises = tasks.stream().map(task -> sender.sendRequest(task).cast(Integer.class))
@@ -78,7 +79,7 @@ public class WorkerService extends AbstractClusterService {
     @Override
     protected Map<NodeType, List<Class<?>>> getConnectionClassTypes() {
         return Map.of(
-            NodeType.WORKER, List.of(CalcRequest.class, Integer.class, WorkerTask.class)
+            ServiceType.WORKER, List.of(CalcRequest.class, Integer.class, WorkerTask.class)
         );
     }
 

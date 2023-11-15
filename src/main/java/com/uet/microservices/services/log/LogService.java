@@ -3,6 +3,7 @@ package com.uet.microservices.services.log;
 import com.uet.microservices.lib.model.NodeType;
 import com.uet.microservices.lib.protocol.RpcBasicOperation;
 import com.uet.microservices.lib.service.AbstractClusterService;
+import com.uet.microservices.services.ServiceType;
 import io.activej.eventloop.Eventloop;
 import io.activej.promise.Promise;
 import io.activej.rpc.server.RpcRequestHandler;
@@ -28,7 +29,7 @@ public class LogService extends AbstractClusterService {
             eventloop,
             discoveryAddr,
             "log-service",
-            NodeType.LOG,
+            ServiceType.LOG,
             List.of()
         );
     }
@@ -39,7 +40,7 @@ public class LogService extends AbstractClusterService {
             msg -> {
                 logger.info(">> Received message: {}", msg);
                 var task   = LogTask.create(msg);
-                var sender = this.seedNodeManager.getSender(NodeType.LOG);
+                var sender = this.seedNodeManager.getSender(ServiceType.LOG);
                 return sender.sendRequest(task)
                              .map($ -> RpcBasicOperation.ACCEPT);
             };
@@ -64,7 +65,7 @@ public class LogService extends AbstractClusterService {
     @Override
     protected Map<NodeType, List<Class<?>>> getConnectionClassTypes() {
         return Map.of(
-            NodeType.LOG, List.of(String.class, RpcBasicOperation.class, LogTask.class)
+            ServiceType.LOG, List.of(String.class, RpcBasicOperation.class, LogTask.class)
         );
     }
 

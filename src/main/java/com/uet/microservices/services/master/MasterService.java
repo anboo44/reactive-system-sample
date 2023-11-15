@@ -3,6 +3,7 @@ package com.uet.microservices.services.master;
 import com.uet.microservices.lib.model.NodeType;
 import com.uet.microservices.lib.protocol.RpcBasicOperation;
 import com.uet.microservices.lib.service.AbstractClusterService;
+import com.uet.microservices.services.ServiceType;
 import io.activej.eventloop.Eventloop;
 import io.activej.http.AsyncServlet;
 import io.activej.http.HttpResponse;
@@ -37,8 +38,8 @@ public class MasterService extends AbstractClusterService {
             eventloop,
             discoveryAddr,
             "master-service",
-            NodeType.MASTER_API,
-            List.of(NodeType.WORKER, NodeType.LOG),
+            ServiceType.MASTER,
+            List.of(ServiceType.WORKER, ServiceType.LOG),
             9080
         );
     }
@@ -51,8 +52,8 @@ public class MasterService extends AbstractClusterService {
     @Override
     protected Map<NodeType, List<Class<?>>> getConnectionClassTypes() {
         return Map.of(
-            NodeType.WORKER, List.of(CalcRequest.class, Integer.class),
-            NodeType.LOG, List.of(String.class, RpcBasicOperation.class)
+            ServiceType.WORKER, List.of(CalcRequest.class, Integer.class),
+            ServiceType.LOG, List.of(String.class, RpcBasicOperation.class)
         );
     }
 
@@ -64,7 +65,7 @@ public class MasterService extends AbstractClusterService {
 
     private void startWebServer() throws IOException {
         AsyncServlet logHandler = req -> {
-            var sender = this.seedNodeManager.getSender(NodeType.LOG);
+            var sender = this.seedNodeManager.getSender(ServiceType.LOG);
             var msg    = req.getQueryParameter("msg");
             return sender.sendRequest(msg)
                          .map($ -> HttpResponse.ok200().withPlainText("OK").build());
@@ -78,7 +79,7 @@ public class MasterService extends AbstractClusterService {
                 Integer.parseInt(values[1])
             );
 
-            var sender = this.seedNodeManager.getSender(NodeType.WORKER);
+            var sender = this.seedNodeManager.getSender(ServiceType.WORKER);
             var start  = System.currentTimeMillis();
             return sender.sendRequest(calcRequest)
                          .cast(Integer.class)
