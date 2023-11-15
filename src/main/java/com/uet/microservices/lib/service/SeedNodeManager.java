@@ -51,19 +51,14 @@ public class SeedNodeManager {
                        .orElseThrow(() -> new RuntimeException("No available sender"));
     }
 
-    public int getClusterSize(NodeType nodeType) {
-        return (int) this.seedNodes.stream()
-                                   .filter(sn -> sn.nodeType == nodeType)
-                                   .count();
-    }
-
     private void updateSender(NodeType nodeType, List<Class<?>> classTypes) {
         var seedNodeAddrs =
             this.seedNodes.stream()
-                          .filter(sn -> sn.nodeType == nodeType)
+                          .filter(sn -> sn.nodeType.equals(nodeType))
                           .map(sn -> sn.nodeAddr.toSocketAddr())
                           .map(RpcStrategies::server)
                           .toList();
+
         var strategy  = RpcStrategies.roundRobin(seedNodeAddrs);
         var oldSender = Optional.ofNullable(senderGroup.get(nodeType));
         if (oldSender.isPresent()) {

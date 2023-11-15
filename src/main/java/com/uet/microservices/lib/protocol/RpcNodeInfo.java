@@ -41,7 +41,7 @@ public class RpcNodeInfo {
     public boolean equals(Object obj) {
         if (obj instanceof RpcNodeInfo other) {
             return this.name.equals(other.name) &&
-                   this.nodeType == other.nodeType &&
+                   this.nodeType.equals(other.nodeType) &&
                    this.dscServerAddr.equals(other.dscServerAddr) &&
                    this.mainServerAddr.equals(other.mainServerAddr);
         }

@@ -45,7 +45,7 @@ public class RpcNodeEvent {
     public boolean equals(Object obj) {
         if (obj instanceof RpcNodeEvent other) {
             return this.nodeAddr.equals(other.nodeAddr) &&
-                   this.nodeType == other.nodeType &&
+                   this.nodeType.equals(other.nodeType) &&
                    this.nodeName.equals(other.nodeName);
         }
         return false;
