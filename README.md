@@ -15,7 +15,7 @@ More detail at here: [Reactive Manifesto](https://docs.aws.amazon.com/whitepaper
 2. Run [Master-Service](src/main/java/com/uet/microservices/services/master/MasterService.java)
 3. Run [Log-Service](src/main/java/com/uet/microservices/services/log/LogService.java)
 4. Run [Worker-Service](src/main/java/com/uet/microservices/services/worker/WorkerService.java)
-5. Make a HTTP GET Request: http://localhost:9080/test-log -> test LogService
+5. Make a HTTP GET Request: http://localhost:9080/test-log?message=Hello-World -> test LogService
 6. Make a HTTP GET Request: http://localhost:9080/test-worker?range=1-10 -> test WorkerService
 
 For scaling, you can clone WorkerService/LogService and run it on another port. 
